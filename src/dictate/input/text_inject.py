@@ -73,8 +73,9 @@ class TextInjector:
             time.sleep(0.05)
             
             # Paste via Ctrl+V
+            v_key = KeyCode.from_char('v')
             self._keyboard.press(Key.ctrl)
-            self._keyboard.tap(Key.v)
+            self._keyboard.tap(v_key)
             self._keyboard.release(Key.ctrl)
             
             # Wait for paste to complete
@@ -133,8 +134,9 @@ class TextInjector:
             time.sleep(0.05)
             
             # Paste replaces selection (Ctrl+V)
+            v_key = KeyCode.from_char('v')
             self._keyboard.press(Key.ctrl)
-            self._keyboard.tap(Key.v)
+            self._keyboard.tap(v_key)
             self._keyboard.release(Key.ctrl)
             
             time.sleep(0.05)

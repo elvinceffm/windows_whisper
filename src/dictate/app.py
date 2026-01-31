@@ -165,6 +165,12 @@ class DictateApp(QObject):
     4. Handle Tab (cycle mode), Enter (accept), Esc (cancel)
     """
     
+    # Signals for thread-safe UI updates
+    _show_pill_signal = Signal(int, int)
+    _hide_pill_signal = Signal()
+    _set_amplitude_signal = Signal(float)
+    _set_duration_signal = Signal(float)
+    
     def __init__(self):
         super().__init__()
         
@@ -221,6 +227,12 @@ class DictateApp(QObject):
         self._mode_bar = ModeBar()
         self._tray = SystemTray()
         
+        # Connect pill signals (thread-safe cross-thread communication)
+        self._show_pill_signal.connect(self._pill.show_at)
+        self._hide_pill_signal.connect(self._pill.hide_pill)
+        self._set_amplitude_signal.connect(self._pill.set_amplitude)
+        self._set_duration_signal.connect(self._pill.set_duration)
+        
         # Connect mode bar signals
         self._mode_bar.mode_changed.connect(self._on_mode_changed)
         self._mode_bar.language_changed.connect(self._on_language_changed)
@@ -272,15 +284,8 @@ class DictateApp(QObject):
         if self._audio_recorder.start():
             self._state = AppState.RECORDING
             
-            # Show pill
-            if self._pill:
-                # Use QTimer to update UI from main thread
-                from PySide6.QtCore import QMetaObject, Qt, Q_ARG
-                QMetaObject.invokeMethod(
-                    self._pill, "show_at",
-                    Qt.ConnectionType.QueuedConnection,
-                    Q_ARG(int, x), Q_ARG(int, y)
-                )
+            # Show pill (thread-safe via signal)
+            self._show_pill_signal.emit(x, y)
             
             if self._tray:
                 self._tray.set_recording(True)
@@ -293,13 +298,8 @@ class DictateApp(QObject):
         # Stop recording
         audio_data = self._audio_recorder.stop()
         
-        # Hide pill
-        if self._pill:
-            from PySide6.QtCore import QMetaObject, Qt
-            QMetaObject.invokeMethod(
-                self._pill, "hide_pill",
-                Qt.ConnectionType.QueuedConnection
-            )
+        # Hide pill (thread-safe via signal)
+        self._hide_pill_signal.emit()
         
         if self._tray:
             self._tray.set_recording(False)
@@ -317,23 +317,13 @@ class DictateApp(QObject):
     
     def _on_amplitude(self, amplitude: float) -> None:
         """Handle real-time amplitude updates."""
-        if self._pill and self._state == AppState.RECORDING:
-            from PySide6.QtCore import QMetaObject, Qt, Q_ARG
-            QMetaObject.invokeMethod(
-                self._pill, "set_amplitude",
-                Qt.ConnectionType.QueuedConnection,
-                Q_ARG(float, amplitude)
-            )
+        if self._state == AppState.RECORDING:
+            self._set_amplitude_signal.emit(amplitude)
     
     def _on_duration(self, duration: float) -> None:
         """Handle recording duration updates."""
-        if self._pill and self._state == AppState.RECORDING:
-            from PySide6.QtCore import QMetaObject, Qt, Q_ARG
-            QMetaObject.invokeMethod(
-                self._pill, "set_duration",
-                Qt.ConnectionType.QueuedConnection,
-                Q_ARG(float, duration)
-            )
+        if self._state == AppState.RECORDING:
+            self._set_duration_signal.emit(duration)
     
     def _start_transcription(self, audio_data: np.ndarray) -> None:
         """Start async transcription."""
@@ -393,12 +383,21 @@ class DictateApp(QObject):
         self._state = AppState.IDLE
     
     def _start_tentative_listener(self) -> None:
-        """Start listening for Tab/Enter/Esc in tentative state."""
+        """
+        Start listening for Tab/Enter/Esc in tentative state.
+        
+        Note: Uses pynput which cannot suppress keys on Windows without
+        using win32_event_filter. The keys will still pass to other apps
+        but we handle them here first.
+        """
         from pynput import keyboard
+        
+        # Stop any existing listener first
+        self._stop_tentative_listener()
         
         def on_press(key):
             if self._state != AppState.TENTATIVE:
-                return
+                return  # Not in tentative state, ignore
             
             try:
                 if key == keyboard.Key.enter:
@@ -406,13 +405,14 @@ class DictateApp(QObject):
                     return False  # Stop listener
                 elif key == keyboard.Key.tab:
                     self._cycle_mode()
-                    return False  # Will restart listener after reprocess
+                    return False  # Stop listener, will restart after reprocess
                 elif key == keyboard.Key.esc:
                     self._cancel_tentative()
-                    return False
+                    return False  # Stop listener
             except Exception as e:
                 print(f"Tentative listener error: {e}")
         
+        # Create listener - keys will pass through but we still respond to them
         self._tentative_listener = keyboard.Listener(on_press=on_press)
         self._tentative_listener.start()
     
