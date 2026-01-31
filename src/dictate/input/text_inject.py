@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 import pyperclip
-from pynput.keyboard import Key, Controller as KeyboardController
+from pynput.keyboard import Key, KeyCode, Controller as KeyboardController
 
 
 @dataclass 
@@ -74,7 +74,7 @@ class TextInjector:
             
             # Paste via Ctrl+V
             self._keyboard.press(Key.ctrl)
-            self._keyboard.tap(Key.from_vk(0x56))  # 'v' key
+            self._keyboard.tap(Key.v)
             self._keyboard.release(Key.ctrl)
             
             # Wait for paste to complete
@@ -132,9 +132,9 @@ class TextInjector:
             pyperclip.copy(new_text)
             time.sleep(0.05)
             
-            # Paste replaces selection
+            # Paste replaces selection (Ctrl+V)
             self._keyboard.press(Key.ctrl)
-            self._keyboard.tap(Key.from_vk(0x56))  # 'v' key  
+            self._keyboard.tap(Key.v)
             self._keyboard.release(Key.ctrl)
             
             time.sleep(0.05)

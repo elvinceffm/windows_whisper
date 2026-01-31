@@ -7,7 +7,7 @@ near the text caret while recording.
 
 from PySide6.QtCore import (
     Qt, QTimer, QPropertyAnimation, QEasingCurve,
-    Property, QPoint, QSize, Signal, QRectF,
+    Property, QPoint, QSize, Signal, QRectF, Slot,
 )
 from PySide6.QtGui import (
     QPainter, QColor, QPainterPath, QLinearGradient,
@@ -116,6 +116,7 @@ class RecordingPill(QWidget):
         """Check if recording is active."""
         return self._is_recording
     
+    @Slot(float)
     def set_amplitude(self, amplitude: float) -> None:
         """
         Set the current audio amplitude for waveform visualization.
@@ -136,6 +137,7 @@ class RecordingPill(QWidget):
             )
             self._target_bar_heights[i] = target
     
+    @Slot(float)
     def set_duration(self, duration: float) -> None:
         """
         Set the current recording duration.
@@ -146,6 +148,7 @@ class RecordingPill(QWidget):
         self._duration = duration
         self.update()
     
+    @Slot(int, int)
     def show_at(self, x: int, y: int) -> None:
         """
         Show the pill at the specified screen position.
@@ -159,6 +162,7 @@ class RecordingPill(QWidget):
         self.show()
         self._fade_in()
     
+    @Slot()
     def hide_pill(self) -> None:
         """Hide the pill with fade animation."""
         self._stop_recording_state()
