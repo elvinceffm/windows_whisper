@@ -94,10 +94,3 @@ def inject_text(text: str) -> bool:
     """
     injector = TextInjector()
     return injector.inject(text)
-        
-    Returns:
-        True if successful
-    """
-    injector = TextInjector()
-    return injector.inject(text)
-    return injector.inject(text, select=select)
