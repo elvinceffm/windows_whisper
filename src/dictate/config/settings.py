@@ -55,6 +55,9 @@ class Settings:
     theme: str = "system"  # "system", "dark", or "light"
     pill_opacity: float = 0.95
     
+    # Startup settings
+    run_at_startup: bool = False
+    
     # Custom modes
     custom_modes: list[dict] = field(default_factory=list)
     
@@ -202,3 +205,130 @@ def reset_settings() -> Settings:
     _settings = Settings()
     save_settings(_settings)
     return _settings
+
+
+# ============================================================================
+# Windows Startup Management
+# ============================================================================
+
+def get_startup_folder() -> Path:
+    """Get the Windows Startup folder path."""
+    if os.name == "nt":
+        # Windows: %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
+        appdata = os.environ.get("APPDATA", str(Path.home()))
+        return Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+    else:
+        # Linux/Mac: Use autostart directory (for testing)
+        return Path.home() / ".config" / "autostart"
+
+
+def get_startup_shortcut_path() -> Path:
+    """Get the path to the startup shortcut."""
+    return get_startup_folder() / "Dictate for Windows.lnk"
+
+
+def is_autostart_enabled() -> bool:
+    """Check if autostart is currently enabled."""
+    return get_startup_shortcut_path().exists()
+
+
+def enable_autostart() -> bool:
+    """
+    Enable autostart by creating a startup shortcut.
+    
+    Returns:
+        True if successful
+    """
+    if os.name != "nt":
+        print("Autostart is only supported on Windows")
+        return False
+    
+    try:
+        import sys
+        
+        # Get the Python executable and script
+        python_exe = sys.executable
+        # Use pythonw.exe for no console window
+        pythonw_exe = python_exe.replace("python.exe", "pythonw.exe")
+        if not Path(pythonw_exe).exists():
+            pythonw_exe = python_exe
+        
+        # Create shortcut using Windows Script Host
+        startup_folder = get_startup_folder()
+        startup_folder.mkdir(parents=True, exist_ok=True)
+        
+        shortcut_path = get_startup_shortcut_path()
+        
+        # Use win32com to create shortcut
+        try:
+            import win32com.client
+            
+            shell = win32com.client.Dispatch("WScript.Shell")
+            shortcut = shell.CreateShortCut(str(shortcut_path))
+            shortcut.TargetPath = pythonw_exe
+            shortcut.Arguments = "-m dictate"
+            shortcut.WorkingDirectory = str(Path.cwd())
+            shortcut.Description = "Dictate for Windows - AI-powered dictation"
+            shortcut.IconLocation = pythonw_exe
+            shortcut.save()
+            
+            return True
+            
+        except ImportError:
+            # Fallback: Use PowerShell to create shortcut
+            import subprocess
+            
+            ps_script = f'''
+$WshShell = New-Object -ComObject WScript.Shell
+$Shortcut = $WshShell.CreateShortcut("{shortcut_path}")
+$Shortcut.TargetPath = "{pythonw_exe}"
+$Shortcut.Arguments = "-m dictate"
+$Shortcut.WorkingDirectory = "{Path.cwd()}"
+$Shortcut.Description = "Dictate for Windows - AI-powered dictation"
+$Shortcut.Save()
+'''
+            
+            result = subprocess.run(
+                ["powershell", "-Command", ps_script],
+                capture_output=True,
+                text=True,
+            )
+            
+            return result.returncode == 0
+            
+    except Exception as e:
+        print(f"Failed to enable autostart: {e}")
+        return False
+
+
+def disable_autostart() -> bool:
+    """
+    Disable autostart by removing the startup shortcut.
+    
+    Returns:
+        True if successful
+    """
+    try:
+        shortcut_path = get_startup_shortcut_path()
+        if shortcut_path.exists():
+            shortcut_path.unlink()
+        return True
+    except Exception as e:
+        print(f"Failed to disable autostart: {e}")
+        return False
+
+
+def set_autostart(enabled: bool) -> bool:
+    """
+    Enable or disable autostart.
+    
+    Args:
+        enabled: True to enable, False to disable
+        
+    Returns:
+        True if successful
+    """
+    if enabled:
+        return enable_autostart()
+    else:
+        return disable_autostart()

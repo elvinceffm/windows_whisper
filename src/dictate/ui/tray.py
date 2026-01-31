@@ -8,11 +8,11 @@ from PySide6.QtWidgets import (
     QSystemTrayIcon, QMenu, QDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QComboBox, QPushButton, QFormLayout,
     QGroupBox, QListWidget, QListWidgetItem, QTextEdit,
-    QTabWidget, QWidget, QMessageBox, QApplication,
+    QTabWidget, QWidget, QMessageBox, QApplication, QCheckBox,
 )
 
 from typing import Optional
-from ..config.settings import Settings, get_settings, save_settings
+from ..config.settings import Settings, get_settings, save_settings, set_autostart
 from ..api.client import PROVIDERS
 
 
@@ -118,6 +118,19 @@ class SettingsDialog(QDialog):
         translation_group.setLayout(translation_layout)
         general_layout.addWidget(translation_group)
         
+        # Startup settings
+        startup_group = QGroupBox("Startup")
+        startup_layout = QVBoxLayout()
+        
+        self._autostart_checkbox = QCheckBox("Start with Windows")
+        self._autostart_checkbox.setToolTip(
+            "Automatically start Dictate when you log in to Windows"
+        )
+        startup_layout.addWidget(self._autostart_checkbox)
+        
+        startup_group.setLayout(startup_layout)
+        general_layout.addWidget(startup_group)
+        
         general_layout.addStretch()
         tabs.addTab(general_tab, "General")
         
@@ -214,6 +227,9 @@ class SettingsDialog(QDialog):
         if index >= 0:
             self._language_combo.setCurrentIndex(index)
         
+        # Autostart
+        self._autostart_checkbox.setChecked(self._settings.run_at_startup)
+        
         # Custom modes
         self._refresh_modes_list()
     
@@ -304,6 +320,18 @@ class SettingsDialog(QDialog):
         self._settings.openai_api_key = self._openai_key_input.text()
         self._settings.trigger_key = self._hotkey_combo.currentData()
         self._settings.default_target_language = self._language_combo.currentText()
+        
+        # Handle autostart change
+        new_autostart = self._autostart_checkbox.isChecked()
+        if new_autostart != self._settings.run_at_startup:
+            if set_autostart(new_autostart):
+                self._settings.run_at_startup = new_autostart
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Autostart Error",
+                    "Failed to update autostart setting. Please try again."
+                )
         
         # Save to disk
         save_settings(self._settings)
