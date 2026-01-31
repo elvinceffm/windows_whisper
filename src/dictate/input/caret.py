@@ -222,8 +222,8 @@ def get_overlay_position(
     """
     Get the best position for the recording overlay.
     
-    Tries to position near the text caret, falls back to window center
-    or screen center.
+    Tries to position near the text caret, falls back to bottom-center
+    of foreground window, then screen bottom-center.
     
     Args:
         offset_x: Horizontal offset from caret
@@ -238,14 +238,16 @@ def get_overlay_position(
         # Position to the right and slightly below the caret
         return (caret.x + caret.width + offset_x, caret.y + offset_y)
     
-    # Fallback to foreground window center
-    center = get_foreground_window_center()
-    if center:
-        return center
+    # Fallback to bottom-center of foreground window
+    rect = get_foreground_window_rect()
+    if rect:
+        x, y, width, height = rect
+        # Position at bottom-center of window, 100px from bottom
+        return (x + width // 2 - 90, y + height - 100)
     
-    # Ultimate fallback: screen center
+    # Ultimate fallback: screen bottom-center
     monitor = get_active_monitor_rect()
     return (
-        monitor[0] + monitor[2] // 2,
-        monitor[1] + monitor[3] // 2,
+        monitor[0] + monitor[2] // 2 - 90,
+        monitor[1] + monitor[3] - 100,
     )

@@ -5,11 +5,11 @@ Wires together all components:
 - Hotkey listener (trigger)
 - Audio capture (recording)
 - Cloud API (transcription + processing)
+- Preview card (review before injection)
 - Text injection (output)
 - UI overlays (feedback)
 """
 
-import threading
 from typing import Optional
 from dataclasses import dataclass
 from enum import Enum, auto
@@ -27,7 +27,7 @@ from .api.process import (
     ProcessingMode, CustomMode, process_text, get_all_modes,
 )
 from .ui.overlay import RecordingPill
-from .ui.mode_bar import ModeBar
+from .ui.preview_card import PreviewCard
 from .ui.tray import SystemTray, SettingsDialog
 from .config.settings import get_settings, save_settings
 
@@ -40,7 +40,7 @@ class AppState(Enum):
     IDLE = auto()
     RECORDING = auto()
     PROCESSING = auto()
-    TENTATIVE = auto()  # Text injected, waiting for accept/cancel/cycle
+    PREVIEW = auto()  # Preview card shown, waiting for insert/cancel
 
 
 @dataclass
@@ -54,68 +54,42 @@ class TranscriptionResult:
 
 
 class TranscriptionWorker(QObject):
-    """Worker for async transcription and processing."""
+    """Worker for async transcription."""
     
-    finished = Signal(object)  # TranscriptionResult
+    finished = Signal(str)  # Transcribed text
     error = Signal(str)
     
     def __init__(self):
         super().__init__()
         self._audio_data: Optional[np.ndarray] = None
-        self._mode: ProcessingMode | CustomMode = ProcessingMode.NORMAL
-        self._target_language: str = "English"
     
-    def set_data(
-        self,
-        audio_data: np.ndarray,
-        mode: ProcessingMode | CustomMode = ProcessingMode.NORMAL,
-        target_language: str = "English",
-    ) -> None:
-        """Set data for transcription."""
+    def set_data(self, audio_data: np.ndarray) -> None:
+        """Set audio data for transcription."""
         self._audio_data = audio_data
-        self._mode = mode
-        self._target_language = target_language
     
     @Slot()
     def run(self) -> None:
-        """Run transcription and processing."""
+        """Run transcription."""
         try:
             if self._audio_data is None or len(self._audio_data) == 0:
                 self.error.emit("No audio recorded")
                 return
             
-            # Transcribe
-            original_text = transcribe_audio(self._audio_data)
+            # Transcribe only - no processing yet
+            text = transcribe_audio(self._audio_data)
             
-            if not original_text:
+            if not text:
                 self.error.emit("No speech detected")
                 return
             
-            # Process if not Normal mode
-            if self._mode == ProcessingMode.NORMAL:
-                processed_text = original_text
-            else:
-                processed_text = process_text(
-                    original_text,
-                    self._mode,
-                    self._target_language,
-                )
-            
-            result = TranscriptionResult(
-                original_text=original_text,
-                processed_text=processed_text,
-                mode=self._mode,
-                target_language=self._target_language,
-            )
-            
-            self.finished.emit(result)
+            self.finished.emit(text)
             
         except Exception as e:
             self.error.emit(str(e))
 
 
 class ReprocessWorker(QObject):
-    """Worker for reprocessing text with a different mode."""
+    """Worker for processing text with a mode."""
     
     finished = Signal(str)  # Processed text
     error = Signal(str)
@@ -132,7 +106,7 @@ class ReprocessWorker(QObject):
         mode: ProcessingMode | CustomMode,
         target_language: str = "English",
     ) -> None:
-        """Set data for reprocessing."""
+        """Set data for processing."""
         self._text = text
         self._mode = mode
         self._target_language = target_language
@@ -161,8 +135,8 @@ class DictateApp(QObject):
     Manages the complete flow:
     1. Hotkey press → start recording, show pill
     2. Hotkey release → stop recording, transcribe
-    3. Show mode bar, inject tentative text
-    4. Handle Tab (cycle mode), Enter (accept), Esc (cancel)
+    3. Show preview card with text
+    4. User clicks mode buttons to reprocess, clicks Insert or presses trigger to inject
     """
     
     # Signals for thread-safe UI updates
@@ -170,6 +144,10 @@ class DictateApp(QObject):
     _hide_pill_signal = Signal()
     _set_amplitude_signal = Signal(float)
     _set_duration_signal = Signal(float)
+    _show_preview_signal = Signal(str, int, int)  # text, x, y
+    _hide_preview_signal = Signal()
+    _update_preview_text_signal = Signal(str)
+    _set_preview_processing_signal = Signal(bool)
     
     def __init__(self):
         super().__init__()
@@ -177,7 +155,8 @@ class DictateApp(QObject):
         # State
         self._state = AppState.IDLE
         self._is_enabled = True
-        self._current_result: Optional[TranscriptionResult] = None
+        self._original_text: str = ""  # Original transcription for reprocessing
+        self._caret_position: tuple[int, int] = (0, 0)  # Saved for preview card
         
         # Load settings
         self._settings = get_settings()
@@ -199,7 +178,7 @@ class DictateApp(QObject):
         
         # UI components (created later in start())
         self._pill: Optional[RecordingPill] = None
-        self._mode_bar: Optional[ModeBar] = None
+        self._preview_card: Optional[PreviewCard] = None
         self._tray: Optional[SystemTray] = None
         
         # Worker threads
@@ -207,9 +186,6 @@ class DictateApp(QObject):
         self._transcription_worker: Optional[TranscriptionWorker] = None
         self._reprocess_thread: Optional[QThread] = None
         self._reprocess_worker: Optional[ReprocessWorker] = None
-        
-        # Keyboard listener for tentative state
-        self._tentative_listener = None
     
     def _init_api_client(self) -> None:
         """Initialize the API client from settings."""
@@ -224,7 +200,7 @@ class DictateApp(QObject):
         """Start the application."""
         # Create UI components
         self._pill = RecordingPill()
-        self._mode_bar = ModeBar()
+        self._preview_card = PreviewCard()
         self._tray = SystemTray()
         
         # Connect pill signals (thread-safe cross-thread communication)
@@ -233,9 +209,17 @@ class DictateApp(QObject):
         self._set_amplitude_signal.connect(self._pill.set_amplitude)
         self._set_duration_signal.connect(self._pill.set_duration)
         
-        # Connect mode bar signals
-        self._mode_bar.mode_changed.connect(self._on_mode_changed)
-        self._mode_bar.language_changed.connect(self._on_language_changed)
+        # Connect preview card signals
+        self._show_preview_signal.connect(self._do_show_preview)
+        self._hide_preview_signal.connect(self._preview_card.hide_card)
+        self._update_preview_text_signal.connect(self._preview_card.set_text)
+        self._set_preview_processing_signal.connect(self._preview_card.set_processing)
+        
+        # Connect preview card user actions
+        self._preview_card.insert_requested.connect(self._on_insert_requested)
+        self._preview_card.cancelled.connect(self._on_preview_cancelled)
+        self._preview_card.mode_changed.connect(self._on_mode_changed)
+        self._preview_card.language_changed.connect(self._on_language_changed)
         
         # Connect tray signals
         self._tray.show_settings.connect(self._show_settings)
@@ -250,14 +234,26 @@ class DictateApp(QObject):
         
         print("Dictate for Windows started. Press trigger key to record.")
     
+    @Slot(str, int, int)
+    def _do_show_preview(self, text: str, x: int, y: int) -> None:
+        """Show preview card with text at position."""
+        if self._preview_card:
+            # Set available modes
+            modes = get_all_modes(self._settings.get_custom_modes())
+            self._preview_card.set_modes(modes, ProcessingMode.NORMAL)
+            
+            # Set text and show
+            self._preview_card.set_text(text, is_original=True)
+            self._preview_card.show_at(x, y)
+    
     def stop(self) -> None:
         """Stop the application."""
         self._hotkey_manager.stop()
         
         if self._pill:
             self._pill.close()
-        if self._mode_bar:
-            self._mode_bar.close()
+        if self._preview_card:
+            self._preview_card.close()
         if self._tray:
             self._tray.hide()
     
@@ -270,21 +266,24 @@ class DictateApp(QObject):
         if not self._is_enabled:
             return
         
-        if self._state == AppState.TENTATIVE:
-            # Cancel current tentative text
-            self._cancel_tentative()
+        # If preview card is shown, trigger key acts as "Insert"
+        if self._state == AppState.PREVIEW:
+            if self._preview_card:
+                self._preview_card.insert()
+            return
         
         if self._state != AppState.IDLE:
             return
         
-        # Get caret position for pill placement
-        x, y = get_overlay_position()
+        # Save caret position for later use
+        self._caret_position = get_overlay_position()
         
         # Start recording
         if self._audio_recorder.start():
             self._state = AppState.RECORDING
             
-            # Show pill (thread-safe via signal)
+            # Show pill at caret position
+            x, y = self._caret_position
             self._show_pill_signal.emit(x, y)
             
             if self._tray:
@@ -298,7 +297,7 @@ class DictateApp(QObject):
         # Stop recording
         audio_data = self._audio_recorder.stop()
         
-        # Hide pill (thread-safe via signal)
+        # Hide pill
         self._hide_pill_signal.emit()
         
         if self._tray:
@@ -338,11 +337,7 @@ class DictateApp(QObject):
         self._transcription_worker.moveToThread(self._transcription_thread)
         
         # Set data
-        self._transcription_worker.set_data(
-            audio_data,
-            ProcessingMode.NORMAL,  # Start with Normal mode
-            self._settings.default_target_language,
-        )
+        self._transcription_worker.set_data(audio_data)
         
         # Connect signals
         self._transcription_thread.started.connect(self._transcription_worker.run)
@@ -354,26 +349,22 @@ class DictateApp(QObject):
         # Start
         self._transcription_thread.start()
     
-    def _on_transcription_complete(self, result: TranscriptionResult) -> None:
+    @Slot(str)
+    def _on_transcription_complete(self, text: str) -> None:
         """Handle transcription completion."""
         if self._tray:
             self._tray.set_processing(False)
         
-        self._current_result = result
+        self._original_text = text
         
-        # Inject text and select it
-        self._text_injector.inject(result.processed_text, select=True)
+        # Show preview card near caret position
+        x, y = self._caret_position
+        self._show_preview_signal.emit(text, x, y + 30)  # Offset below cursor
         
-        # Show mode bar
-        modes = get_all_modes(self._settings.get_custom_modes())
-        if self._mode_bar:
-            self._mode_bar.set_modes(modes, initial_index=0)
-            self._mode_bar.show_bar()
-        
-        # Enter tentative state
-        self._state = AppState.TENTATIVE
-        self._start_tentative_listener()
+        # Enter preview state
+        self._state = AppState.PREVIEW
     
+    @Slot(str)
     def _on_transcription_error(self, error: str) -> None:
         """Handle transcription error."""
         if self._tray:
@@ -382,96 +373,45 @@ class DictateApp(QObject):
         print(f"Transcription error: {error}")
         self._state = AppState.IDLE
     
-    def _start_tentative_listener(self) -> None:
-        """
-        Start listening for Tab/Enter/Esc in tentative state.
+    @Slot(str)
+    def _on_insert_requested(self, text: str) -> None:
+        """Handle insert button click or trigger key during preview."""
+        # Hide preview card
+        self._hide_preview_signal.emit()
         
-        Note: Uses pynput which cannot suppress keys on Windows without
-        using win32_event_filter. The keys will still pass to other apps
-        but we handle them here first.
-        """
-        from pynput import keyboard
+        # Inject the text
+        self._text_injector.inject(text)
         
-        # Stop any existing listener first
-        self._stop_tentative_listener()
-        
-        def on_press(key):
-            if self._state != AppState.TENTATIVE:
-                return  # Not in tentative state, ignore
-            
-            try:
-                if key == keyboard.Key.enter:
-                    self._accept_tentative()
-                    return False  # Stop listener
-                elif key == keyboard.Key.tab:
-                    self._cycle_mode()
-                    return False  # Stop listener, will restart after reprocess
-                elif key == keyboard.Key.esc:
-                    self._cancel_tentative()
-                    return False  # Stop listener
-            except Exception as e:
-                print(f"Tentative listener error: {e}")
-        
-        # Create listener - keys will pass through but we still respond to them
-        self._tentative_listener = keyboard.Listener(on_press=on_press)
-        self._tentative_listener.start()
-    
-    def _stop_tentative_listener(self) -> None:
-        """Stop the tentative state keyboard listener."""
-        if self._tentative_listener:
-            self._tentative_listener.stop()
-            self._tentative_listener = None
-    
-    def _accept_tentative(self) -> None:
-        """Accept the tentative text."""
-        self._stop_tentative_listener()
-        self._text_injector.accept()
-        
-        if self._mode_bar:
-            self._mode_bar.hide_bar()
-        
+        # Return to idle
         self._state = AppState.IDLE
-        self._current_result = None
+        self._original_text = ""
     
-    def _cancel_tentative(self) -> None:
-        """Cancel and delete the tentative text."""
-        self._stop_tentative_listener()
-        self._text_injector.cancel()
+    @Slot()
+    def _on_preview_cancelled(self) -> None:
+        """Handle cancel button click."""
+        # Hide preview card
+        self._hide_preview_signal.emit()
         
-        if self._mode_bar:
-            self._mode_bar.hide_bar()
-        
+        # Return to idle without injecting
         self._state = AppState.IDLE
-        self._current_result = None
+        self._original_text = ""
     
-    def _cycle_mode(self) -> None:
-        """Cycle to the next processing mode."""
-        if not self._mode_bar or not self._current_result:
+    @Slot(object)
+    def _on_mode_changed(self, mode: ProcessingMode | CustomMode) -> None:
+        """Handle mode change from preview card."""
+        if self._state != AppState.PREVIEW or not self._original_text:
             return
-        
-        self._stop_tentative_listener()
-        self._mode_bar.cycle_next()
         
         # Reprocess with new mode
-        new_mode = self._mode_bar.current_mode
-        if new_mode:
-            self._reprocess_text(new_mode)
-    
-    def _on_mode_changed(self, mode: ProcessingMode | CustomMode) -> None:
-        """Handle mode change from mode bar click."""
-        if self._state != AppState.TENTATIVE or not self._current_result:
-            return
-        
-        self._stop_tentative_listener()
         self._reprocess_text(mode)
     
+    @Slot(str)
     def _on_language_changed(self, language: str) -> None:
         """Handle translation language change."""
-        if self._state != AppState.TENTATIVE or not self._current_result:
+        if self._state != AppState.PREVIEW or not self._original_text:
             return
         
-        if self._mode_bar and self._mode_bar.current_mode == ProcessingMode.TRANSLATE:
-            self._stop_tentative_listener()
+        if self._preview_card and self._preview_card.current_mode == ProcessingMode.TRANSLATE:
             self._reprocess_text(ProcessingMode.TRANSLATE, language)
     
     def _reprocess_text(
@@ -480,18 +420,17 @@ class DictateApp(QObject):
         target_language: Optional[str] = None,
     ) -> None:
         """Reprocess the original text with a new mode."""
-        if not self._current_result:
+        if not self._original_text:
             return
         
         if target_language is None:
             target_language = (
-                self._mode_bar.target_language if self._mode_bar
+                self._preview_card.target_language if self._preview_card
                 else self._settings.default_target_language
             )
         
         # Show processing indicator
-        if self._mode_bar:
-            self._mode_bar.show_processing(True)
+        self._set_preview_processing_signal.emit(True)
         
         # Clean up previous thread
         if self._reprocess_thread and self._reprocess_thread.isRunning():
@@ -504,55 +443,33 @@ class DictateApp(QObject):
         self._reprocess_worker.moveToThread(self._reprocess_thread)
         
         self._reprocess_worker.set_data(
-            self._current_result.original_text,
+            self._original_text,
             mode,
             target_language,
         )
         
         # Connect signals
         self._reprocess_thread.started.connect(self._reprocess_worker.run)
-        self._reprocess_worker.finished.connect(
-            lambda text: self._on_reprocess_complete(text, mode, target_language)
-        )
+        self._reprocess_worker.finished.connect(self._on_reprocess_complete)
         self._reprocess_worker.error.connect(self._on_reprocess_error)
         self._reprocess_worker.finished.connect(self._reprocess_thread.quit)
         self._reprocess_worker.error.connect(self._reprocess_thread.quit)
         
         self._reprocess_thread.start()
     
-    def _on_reprocess_complete(
-        self,
-        text: str,
-        mode: ProcessingMode | CustomMode,
-        target_language: str,
-    ) -> None:
+    @Slot(str)
+    def _on_reprocess_complete(self, text: str) -> None:
         """Handle reprocessing completion."""
-        if self._mode_bar:
-            self._mode_bar.show_processing(False)
+        self._set_preview_processing_signal.emit(False)
         
-        if not self._current_result:
-            return
-        
-        # Update result
-        self._current_result.processed_text = text
-        self._current_result.mode = mode
-        self._current_result.target_language = target_language
-        
-        # Replace the selected text
-        self._text_injector.replace(text)
-        
-        # Restart tentative listener
-        self._start_tentative_listener()
+        # Update preview card text
+        self._update_preview_text_signal.emit(text)
     
+    @Slot(str)
     def _on_reprocess_error(self, error: str) -> None:
         """Handle reprocessing error."""
-        if self._mode_bar:
-            self._mode_bar.show_processing(False)
-        
+        self._set_preview_processing_signal.emit(False)
         print(f"Reprocessing error: {error}")
-        
-        # Restart tentative listener without changing text
-        self._start_tentative_listener()
     
     def _show_settings(self) -> None:
         """Show the settings dialog."""
@@ -560,6 +477,7 @@ class DictateApp(QObject):
         dialog.settings_saved.connect(self._on_settings_saved)
         dialog.exec()
     
+    @Slot()
     def _on_settings_saved(self) -> None:
         """Handle settings being saved."""
         # Reload settings

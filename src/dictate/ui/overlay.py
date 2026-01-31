@@ -153,11 +153,31 @@ class RecordingPill(QWidget):
         """
         Show the pill at the specified screen position.
         
+        Ensures pill stays within screen bounds.
+        
         Args:
             x: Screen X coordinate
             y: Screen Y coordinate
         """
-        self.move(x, y)
+        from PySide6.QtGui import QCursor
+        
+        # Get screen geometry for bounds checking
+        screen = QApplication.screenAt(QCursor.pos())
+        if not screen:
+            screen = QApplication.primaryScreen()
+        
+        if screen:
+            screen_rect = screen.availableGeometry()
+            
+            # Clamp position to screen bounds
+            pill_x = max(screen_rect.left() + 10, 
+                        min(x, screen_rect.right() - self.width() - 10))
+            pill_y = max(screen_rect.top() + 10,
+                        min(y, screen_rect.bottom() - self.height() - 10))
+        else:
+            pill_x, pill_y = x, y
+        
+        self.move(pill_x, pill_y)
         self._start_recording_state()
         self.show()
         self._fade_in()
