@@ -1,7 +1,7 @@
-"""UI components: overlay, mode bar, system tray."""
+"""UI components: overlay, preview card, system tray."""
 
 from .overlay import RecordingPill
-from .mode_bar import ModeBar
+from .preview_card import PreviewCard
 from .tray import SystemTray
 
-__all__ = ["RecordingPill", "ModeBar", "SystemTray"]
+__all__ = ["RecordingPill", "PreviewCard", "SystemTray"]
