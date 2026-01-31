@@ -376,6 +376,8 @@ class DictateApp(QObject):
     @Slot(str)
     def _on_insert_requested(self, text: str) -> None:
         """Handle insert button click or trigger key during preview."""
+        print(f"[App] Insert requested with text: {text[:50] if text else 'EMPTY'}...")
+        
         # Hide preview card first
         self._hide_preview_signal.emit()
         
@@ -383,9 +385,9 @@ class DictateApp(QObject):
         self._state = AppState.IDLE
         self._original_text = ""
         
-        # Delay injection to allow preview card to close and original app to regain focus
+        # Delay injection to allow preview card to fully close and original app to regain focus
         from PySide6.QtCore import QTimer
-        QTimer.singleShot(150, lambda: self._text_injector.inject(text))
+        QTimer.singleShot(300, lambda: self._text_injector.inject(text))
     
     @Slot()
     def _on_preview_cancelled(self) -> None:

@@ -54,24 +54,21 @@ LANGUAGES_WITH_FLAGS = [
     ("Ukrainian", "🇺🇦"),
 ]
 
-# UI Constants
-CARD_MIN_WIDTH = 400
-CARD_MAX_WIDTH = 520
-CARD_MIN_HEIGHT = 140
-CARD_MAX_HEIGHT = 350
-CORNER_RADIUS = 20
-TEXT_COLLAPSED_LINES = 3
+# UI Constants - Fixed size for consistent layout
+CARD_WIDTH = 480
+CARD_HEIGHT = 280
+CORNER_RADIUS = 18
 
-# Colors - Modern dark theme with glassmorphism aesthetic
-BACKGROUND_COLOR = QColor(18, 18, 20, 248)  # Near black, very opaque
-BORDER_COLOR = QColor(255, 255, 255, 25)
+# Colors - Modern translucent dark theme
+BACKGROUND_COLOR = QColor(35, 35, 40, 230)  # Lighter, translucent
+BORDER_COLOR = QColor(255, 255, 255, 20)
 ACCENT_COLOR = QColor(99, 102, 241)  # Indigo
 ACCENT_GRADIENT_START = QColor(99, 102, 241)  # Indigo
 ACCENT_GRADIENT_END = QColor(168, 85, 247)  # Purple
 TEXT_COLOR = QColor(255, 255, 255)
 TEXT_SECONDARY = QColor(156, 163, 175)  # Gray-400
-BUTTON_BG = QColor(39, 39, 42)  # Zinc-800
-BUTTON_HOVER = QColor(63, 63, 70)  # Zinc-700
+BUTTON_BG = QColor(50, 50, 55)  # Lighter zinc
+BUTTON_HOVER = QColor(70, 70, 75)
 SUCCESS_COLOR = QColor(34, 197, 94)  # Green-500
 DANGER_COLOR = QColor(239, 68, 68)  # Red-500
 
@@ -299,53 +296,50 @@ class PreviewCard(QWidget):
         self._fade_animation.setDuration(150)
         self._fade_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
         
-        # Size constraints
-        self.setMinimumWidth(CARD_MIN_WIDTH)
-        self.setMaximumWidth(CARD_MAX_WIDTH)
-        self.setMinimumHeight(CARD_MIN_HEIGHT)
-        self.setMaximumHeight(CARD_MAX_HEIGHT)
+        # Fixed size for consistent layout
+        self.setFixedSize(CARD_WIDTH, CARD_HEIGHT)
     
     def _setup_ui(self) -> None:
         """Build the UI layout."""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(14)
         
-        # Text preview area
+        # Text preview area - fixed height for consistency
         self._text_edit = QTextEdit()
         self._text_edit.setReadOnly(True)
         self._text_edit.setPlaceholderText("Transcribing...")
         self._text_edit.setStyleSheet("""
             QTextEdit {
-                background-color: rgba(39, 39, 42, 180);
-                color: #f4f4f5;
-                border: 1px solid rgba(255, 255, 255, 8);
-                border-radius: 12px;
-                padding: 12px;
-                font-size: 14px;
+                background-color: rgba(255, 255, 255, 6);
+                color: #ffffff;
+                border: 1px solid rgba(255, 255, 255, 12);
+                border-radius: 14px;
+                padding: 14px;
+                font-size: 15px;
                 font-family: 'Segoe UI', system-ui, sans-serif;
-                line-height: 1.5;
-                selection-background-color: rgba(99, 102, 241, 150);
+                line-height: 1.6;
+                selection-background-color: rgba(99, 102, 241, 180);
             }
             QScrollBar:vertical {
-                background: transparent;
-                width: 8px;
-                border-radius: 4px;
+                background: rgba(255, 255, 255, 5);
+                width: 6px;
+                border-radius: 3px;
+                margin: 4px 2px;
             }
             QScrollBar::handle:vertical {
-                background: rgba(255, 255, 255, 30);
-                border-radius: 4px;
+                background: rgba(255, 255, 255, 40);
+                border-radius: 3px;
                 min-height: 30px;
             }
             QScrollBar::handle:vertical:hover {
-                background: rgba(255, 255, 255, 50);
+                background: rgba(255, 255, 255, 60);
             }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
                 height: 0;
             }
         """)
-        self._text_edit.setMinimumHeight(50)
-        self._text_edit.setMaximumHeight(180)
+        self._text_edit.setFixedHeight(100)
         layout.addWidget(self._text_edit)
         
         # Mode buttons row
@@ -456,10 +450,10 @@ class PreviewCard(QWidget):
             CORNER_RADIUS, CORNER_RADIUS
         )
         
-        # Gradient background for depth
+        # Gradient background - lighter and more translucent
         gradient = QLinearGradient(0, 0, 0, self.height())
-        gradient.setColorAt(0, QColor(24, 24, 27, 252))
-        gradient.setColorAt(1, QColor(18, 18, 20, 252))
+        gradient.setColorAt(0, QColor(42, 42, 48, 235))
+        gradient.setColorAt(1, QColor(32, 32, 38, 235))
         
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(gradient)
@@ -521,12 +515,7 @@ class PreviewCard(QWidget):
             self._original_text = text
         self._text_edit.setText(text)
         
-        # Adjust height based on content
-        doc_height = self._text_edit.document().size().height()
-        new_height = min(max(60, doc_height + 24), 200)
-        self._text_edit.setFixedHeight(int(new_height))
-        
-        self.adjustSize()
+        # DON'T adjust height - keep fixed size for consistency
     
     @property
     def text(self) -> str:
@@ -556,33 +545,16 @@ class PreviewCard(QWidget):
     
     @Slot(int, int)
     def show_at(self, x: int, y: int) -> None:
-        """Show the card at specified position with screen bounds checking."""
+        """Show the card at center-bottom of screen."""
         # Get screen geometry
         screen = QApplication.screenAt(QCursor.pos())
         if not screen:
             screen = QApplication.primaryScreen()
         screen_rect = screen.availableGeometry()
         
-        # Adjust size before positioning
-        self.adjustSize()
-        
-        # Clamp position to screen bounds
-        card_x = x
-        card_y = y
-        
-        # Prefer below the cursor, but flip above if no room
-        if card_y + self.height() > screen_rect.bottom():
-            card_y = y - self.height() - 20  # Above cursor
-        
-        # Horizontal bounds
-        if card_x + self.width() > screen_rect.right():
-            card_x = screen_rect.right() - self.width() - 10
-        if card_x < screen_rect.left():
-            card_x = screen_rect.left() + 10
-        
-        # Vertical bounds
-        if card_y < screen_rect.top():
-            card_y = screen_rect.top() + 10
+        # Center horizontally, near bottom of screen
+        card_x = screen_rect.center().x() - self.width() // 2
+        card_y = screen_rect.bottom() - self.height() - 60
         
         self.move(card_x, card_y)
         self.show()
@@ -590,8 +562,10 @@ class PreviewCard(QWidget):
     
     @Slot()
     def hide_card(self) -> None:
-        """Hide the card with fade animation."""
-        self._fade_out()
+        \"\"\"Hide the card immediately (no animation for faster focus return).\"\"\"
+        self._fade_animation.stop()
+        self.hide()
+        self._opacity_effect.setOpacity(0.0)
     
     def _fade_in(self) -> None:
         """Animate fade in."""

@@ -31,14 +31,14 @@ WAVEFORM_BAR_GAP = 3
 WAVEFORM_MAX_HEIGHT = 18
 WAVEFORM_MIN_HEIGHT = 4
 
-# Colors - Modern dark theme matching preview card
-BACKGROUND_COLOR = QColor(18, 18, 20, 248)  # Near black
-BACKGROUND_COLOR_LIGHT = QColor(242, 242, 247)  # Light gray
+# Colors - Modern translucent dark theme
+BACKGROUND_COLOR = QColor(30, 30, 35, 200)  # Lighter, more translucent
+BACKGROUND_COLOR_LIGHT = QColor(242, 242, 247, 200)
 ACCENT_COLOR = QColor(239, 68, 68)  # Red-500 (recording)
-ACCENT_GLOW = QColor(239, 68, 68, 60)  # Red glow
+ACCENT_GLOW = QColor(239, 68, 68, 80)  # Red glow
 WAVEFORM_COLOR = QColor(248, 113, 113)  # Red-400
-TEXT_COLOR = QColor(244, 244, 245)  # Zinc-100
-TEXT_COLOR_LIGHT = QColor(0, 0, 0)
+TEXT_COLOR = QColor(255, 255, 255)  # Pure white for contrast
+TEXT_COLOR_LIGHT = QColor(20, 20, 25)
 
 
 class RecordingPill(QWidget):
@@ -152,17 +152,15 @@ class RecordingPill(QWidget):
     @Slot(int, int)
     def show_at(self, x: int, y: int) -> None:
         """
-        Show the pill at the specified screen position.
-        
-        Ensures pill stays within screen bounds.
+        Show the pill at center-bottom of screen.
         
         Args:
-            x: Screen X coordinate
-            y: Screen Y coordinate
+            x: Ignored - using center-bottom positioning
+            y: Ignored - using center-bottom positioning
         """
         from PySide6.QtGui import QCursor
         
-        # Get screen geometry for bounds checking
+        # Get screen geometry
         screen = QApplication.screenAt(QCursor.pos())
         if not screen:
             screen = QApplication.primaryScreen()
@@ -170,11 +168,9 @@ class RecordingPill(QWidget):
         if screen:
             screen_rect = screen.availableGeometry()
             
-            # Clamp position to screen bounds
-            pill_x = max(screen_rect.left() + 10, 
-                        min(x, screen_rect.right() - self.width() - 10))
-            pill_y = max(screen_rect.top() + 10,
-                        min(y, screen_rect.bottom() - self.height() - 10))
+            # Center horizontally, near bottom of screen
+            pill_x = screen_rect.center().x() - self.width() // 2
+            pill_y = screen_rect.bottom() - self.height() - 60
         else:
             pill_x, pill_y = x, y
         
@@ -232,10 +228,10 @@ class RecordingPill(QWidget):
     
     def _update_animation(self) -> None:
         """Update waveform bar animations (called at 60 FPS)."""
-        # Smoothly interpolate bar heights toward targets
+        # Faster interpolation for more responsive feel
         for i in range(WAVEFORM_BARS):
             diff = self._target_bar_heights[i] - self._bar_heights[i]
-            self._bar_heights[i] += diff * 0.3  # Smooth interpolation
+            self._bar_heights[i] += diff * 0.5  # Faster response
         
         self.update()
     
@@ -274,7 +270,7 @@ class RecordingPill(QWidget):
             painter.setBrush(glow_color)
             painter.drawPath(glow_path)
         
-        # Main background with gradient
+        # Main background with translucent gradient
         path = QPainterPath()
         path.addRoundedRect(
             QRectF(3, 3, self.width() - 6, self.height() - 6),
@@ -282,8 +278,8 @@ class RecordingPill(QWidget):
         )
         
         gradient = QLinearGradient(0, 0, 0, self.height())
-        gradient.setColorAt(0, QColor(24, 24, 27, 252))
-        gradient.setColorAt(1, QColor(18, 18, 20, 252))
+        gradient.setColorAt(0, QColor(45, 45, 50, 210))  # Lighter, translucent
+        gradient.setColorAt(1, QColor(35, 35, 40, 210))
         
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(gradient)
@@ -357,17 +353,17 @@ class RecordingPill(QWidget):
             painter.setBrush(bar_gradient)
             painter.drawPath(bar_path)
         
-        # Duration text
-        painter.setPen(text_color)
+        # Duration text - pure white for contrast
+        painter.setPen(QColor(255, 255, 255, 255))
         font = painter.font()
-        font.setPointSize(13)
-        font.setWeight(QFont.Weight.Medium)
+        font.setPointSize(14)
+        font.setWeight(QFont.Weight.DemiBold)
         font.setFamily("Segoe UI")
         painter.setFont(font)
         
         duration_text = self._format_duration()
-        text_x = self.width() - 52
-        text_rect = QRectF(text_x, 0, 44, self.height())
+        text_x = self.width() - 55
+        text_rect = QRectF(text_x, 0, 50, self.height())
         painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, duration_text)
         
         painter.end()

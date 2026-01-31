@@ -38,7 +38,10 @@ class TextInjector:
             True if injection was successful
         """
         if not text:
+            print("[TextInjector] No text to inject")
             return False
+        
+        print(f"[TextInjector] Injecting text: {text[:50]}...")
         
         try:
             # Save original clipboard
@@ -49,31 +52,35 @@ class TextInjector:
             
             # Copy text to clipboard
             pyperclip.copy(text)
+            print(f"[TextInjector] Copied to clipboard, waiting...")
             
-            # Longer delay for clipboard to update and app to receive focus
-            time.sleep(0.15)
+            # Longer delay for focus to settle and clipboard to update
+            time.sleep(0.2)
             
             # Paste via Ctrl+V
             v_key = KeyCode.from_char('v')
             self._keyboard.press(Key.ctrl)
+            time.sleep(0.02)
             self._keyboard.tap(v_key)
+            time.sleep(0.02)
             self._keyboard.release(Key.ctrl)
             
-            # Wait for paste to complete before restoring clipboard
+            print("[TextInjector] Paste command sent")
+            
+            # Wait for paste to complete
             time.sleep(0.2)
             
             return True
             
         except Exception as e:
-            print(f"Text injection failed: {e}")
+            print(f"[TextInjector] Failed: {e}")
             return False
         
         finally:
-            # Restore original clipboard after a longer delay in background
-            # to ensure paste has fully completed
+            # Restore original clipboard after a delay
             if self._original_clipboard is not None:
                 def restore_later():
-                    time.sleep(0.5)
+                    time.sleep(0.8)
                     try:
                         pyperclip.copy(self._original_clipboard)
                     except Exception:
