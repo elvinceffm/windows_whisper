@@ -6,6 +6,7 @@ Text is reviewed in the PreviewCard before injection.
 """
 
 import time
+import threading
 from typing import Optional
 
 import pyperclip
@@ -49,8 +50,8 @@ class TextInjector:
             # Copy text to clipboard
             pyperclip.copy(text)
             
-            # Small delay for clipboard to update
-            time.sleep(0.05)
+            # Longer delay for clipboard to update and app to receive focus
+            time.sleep(0.15)
             
             # Paste via Ctrl+V
             v_key = KeyCode.from_char('v')
@@ -58,8 +59,8 @@ class TextInjector:
             self._keyboard.tap(v_key)
             self._keyboard.release(Key.ctrl)
             
-            # Wait for paste to complete
-            time.sleep(0.05)
+            # Wait for paste to complete before restoring clipboard
+            time.sleep(0.2)
             
             return True
             
@@ -68,18 +69,17 @@ class TextInjector:
             return False
         
         finally:
-            # Restore original clipboard after a delay
-            self._restore_clipboard()
-    
-    def _restore_clipboard(self) -> None:
-        """Restore the original clipboard contents."""
-        if self._original_clipboard is not None:
-            try:
-                time.sleep(0.1)
-                pyperclip.copy(self._original_clipboard)
-            except Exception:
-                pass
-            self._original_clipboard = None
+            # Restore original clipboard after a longer delay in background
+            # to ensure paste has fully completed
+            if self._original_clipboard is not None:
+                def restore_later():
+                    time.sleep(0.5)
+                    try:
+                        pyperclip.copy(self._original_clipboard)
+                    except Exception:
+                        pass
+                threading.Thread(target=restore_later, daemon=True).start()
+                self._original_clipboard = None
 
 
 def inject_text(text: str) -> bool:
@@ -88,6 +88,12 @@ def inject_text(text: str) -> bool:
     
     Args:
         text: Text to inject
+        
+    Returns:
+        True if successful
+    """
+    injector = TextInjector()
+    return injector.inject(text)
         
     Returns:
         True if successful

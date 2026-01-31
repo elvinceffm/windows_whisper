@@ -11,7 +11,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QPainter, QColor, QPainterPath, QLinearGradient,
-    QFont, QFontDatabase,
+    QFont, QFontDatabase, QPen,
 )
 from PySide6.QtWidgets import (
     QWidget, QGraphicsOpacityEffect, QApplication,
@@ -22,21 +22,22 @@ from typing import Optional
 
 
 # UI Constants
-PILL_WIDTH = 180
-PILL_HEIGHT = 44
-CORNER_RADIUS = 22
+PILL_WIDTH = 160
+PILL_HEIGHT = 42
+CORNER_RADIUS = 21
 WAVEFORM_BARS = 5
-WAVEFORM_BAR_WIDTH = 4
+WAVEFORM_BAR_WIDTH = 3
 WAVEFORM_BAR_GAP = 3
-WAVEFORM_MAX_HEIGHT = 20
+WAVEFORM_MAX_HEIGHT = 18
 WAVEFORM_MIN_HEIGHT = 4
 
-# Colors
-BACKGROUND_COLOR = QColor(28, 28, 30)  # Dark gray
+# Colors - Modern dark theme matching preview card
+BACKGROUND_COLOR = QColor(18, 18, 20, 248)  # Near black
 BACKGROUND_COLOR_LIGHT = QColor(242, 242, 247)  # Light gray
-ACCENT_COLOR = QColor(255, 59, 48)  # Red (recording)
-ACCENT_GLOW = QColor(255, 59, 48, 80)  # Red glow
-TEXT_COLOR = QColor(255, 255, 255)
+ACCENT_COLOR = QColor(239, 68, 68)  # Red-500 (recording)
+ACCENT_GLOW = QColor(239, 68, 68, 60)  # Red glow
+WAVEFORM_COLOR = QColor(248, 113, 113)  # Red-400
+TEXT_COLOR = QColor(244, 244, 245)  # Zinc-100
 TEXT_COLOR_LIGHT = QColor(0, 0, 0)
 
 
@@ -253,85 +254,120 @@ class RecordingPill(QWidget):
         return f"{minutes}:{seconds:02d}"
     
     def paintEvent(self, event) -> None:
-        """Paint the pill widget."""
+        """Paint the pill widget with modern styling."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
         # Colors based on theme
-        bg_color = BACKGROUND_COLOR if self._dark_mode else BACKGROUND_COLOR_LIGHT
         text_color = TEXT_COLOR if self._dark_mode else TEXT_COLOR_LIGHT
         
-        # Draw background with rounded corners
+        # Outer glow/shadow effect for depth
+        for i in range(3):
+            glow_path = QPainterPath()
+            offset = (3 - i) * 2
+            glow_path.addRoundedRect(
+                QRectF(offset, offset, self.width() - offset * 2, self.height() - offset * 2),
+                CORNER_RADIUS - offset // 2, CORNER_RADIUS - offset // 2
+            )
+            glow_color = QColor(0, 0, 0, 20 + i * 10)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(glow_color)
+            painter.drawPath(glow_path)
+        
+        # Main background with gradient
         path = QPainterPath()
         path.addRoundedRect(
-            QRectF(0, 0, self.width(), self.height()),
+            QRectF(3, 3, self.width() - 6, self.height() - 6),
             CORNER_RADIUS, CORNER_RADIUS
         )
         
-        # Glow effect (subtle shadow/glow around pill)
-        if self._is_recording:
-            glow_color = QColor(ACCENT_COLOR)
-            glow_color.setAlphaF(self._glow_intensity * 0.3)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(glow_color)
-            
-            glow_path = QPainterPath()
-            glow_path.addRoundedRect(
-                QRectF(-4, -4, self.width() + 8, self.height() + 8),
-                CORNER_RADIUS + 4, CORNER_RADIUS + 4
-            )
-            painter.drawPath(glow_path)
+        gradient = QLinearGradient(0, 0, 0, self.height())
+        gradient.setColorAt(0, QColor(24, 24, 27, 252))
+        gradient.setColorAt(1, QColor(18, 18, 20, 252))
         
-        # Background
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(bg_color)
+        painter.setBrush(gradient)
         painter.drawPath(path)
         
-        # Recording indicator dot
-        dot_x = 16
+        # Subtle top highlight
+        highlight_path = QPainterPath()
+        highlight_path.addRoundedRect(
+            QRectF(3, 3, self.width() - 6, 2),
+            1, 1
+        )
+        painter.setBrush(QColor(255, 255, 255, 8))
+        painter.drawPath(highlight_path)
+        
+        # Border
+        border_pen = QPen(QColor(255, 255, 255, 12))
+        border_pen.setWidth(1)
+        painter.setPen(border_pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(
+            QRectF(3.5, 3.5, self.width() - 7, self.height() - 7),
+            CORNER_RADIUS, CORNER_RADIUS
+        )
+        
+        # Recording indicator dot with glow
+        dot_x = 18
         dot_y = self.height() // 2
         dot_radius = 5
         
+        if self._is_recording:
+            # Glow behind dot
+            glow_radius = dot_radius + 4 + int(3 * self._glow_intensity)
+            glow_color = QColor(ACCENT_COLOR)
+            glow_color.setAlpha(int(40 + 30 * self._glow_intensity))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(glow_color)
+            painter.drawEllipse(QPoint(dot_x, dot_y), glow_radius, glow_radius)
+        
         # Pulsing red dot
-        dot_alpha = 200 + int(55 * self._glow_intensity) if self._is_recording else 200
         dot_color = QColor(ACCENT_COLOR)
-        dot_color.setAlpha(dot_alpha)
+        if self._is_recording:
+            dot_color.setAlpha(200 + int(55 * self._glow_intensity))
+        else:
+            dot_color.setAlpha(150)
         painter.setBrush(dot_color)
-        painter.drawEllipse(
-            QPoint(dot_x, dot_y),
-            dot_radius, dot_radius
-        )
+        painter.drawEllipse(QPoint(dot_x, dot_y), dot_radius, dot_radius)
         
         # Waveform bars
-        waveform_start_x = 36
+        waveform_start_x = 38
         waveform_center_y = self.height() // 2
-        
-        bar_color = ACCENT_COLOR if self._is_recording else QColor(128, 128, 128)
-        painter.setBrush(bar_color)
         
         for i, height in enumerate(self._bar_heights):
             x = waveform_start_x + i * (WAVEFORM_BAR_WIDTH + WAVEFORM_BAR_GAP)
             y = waveform_center_y - height / 2
+            
+            # Gradient for each bar
+            bar_gradient = QLinearGradient(x, y, x, y + height)
+            if self._is_recording:
+                bar_gradient.setColorAt(0, QColor(248, 113, 113))  # Red-400
+                bar_gradient.setColorAt(1, QColor(239, 68, 68))    # Red-500
+            else:
+                bar_gradient.setColorAt(0, QColor(113, 113, 122))
+                bar_gradient.setColorAt(1, QColor(82, 82, 91))
             
             bar_path = QPainterPath()
             bar_path.addRoundedRect(
                 QRectF(x, y, WAVEFORM_BAR_WIDTH, height),
                 WAVEFORM_BAR_WIDTH / 2, WAVEFORM_BAR_WIDTH / 2
             )
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(bar_gradient)
             painter.drawPath(bar_path)
         
         # Duration text
         painter.setPen(text_color)
         font = painter.font()
-        font.setPointSize(14)
+        font.setPointSize(13)
         font.setWeight(QFont.Weight.Medium)
-        # Use monospace for stable width
-        font.setFamily("Consolas, SF Mono, Monaco, monospace")
+        font.setFamily("Segoe UI")
         painter.setFont(font)
         
         duration_text = self._format_duration()
-        text_x = self.width() - 50
-        text_rect = QRectF(text_x, 0, 40, self.height())
+        text_x = self.width() - 52
+        text_rect = QRectF(text_x, 0, 44, self.height())
         painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, duration_text)
         
         painter.end()

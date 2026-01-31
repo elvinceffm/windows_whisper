@@ -55,24 +55,25 @@ LANGUAGES_WITH_FLAGS = [
 ]
 
 # UI Constants
-CARD_MIN_WIDTH = 380
-CARD_MAX_WIDTH = 500
-CARD_MIN_HEIGHT = 160
-CARD_MAX_HEIGHT = 400
-CORNER_RADIUS = 16
+CARD_MIN_WIDTH = 400
+CARD_MAX_WIDTH = 520
+CARD_MIN_HEIGHT = 140
+CARD_MAX_HEIGHT = 350
+CORNER_RADIUS = 20
 TEXT_COLLAPSED_LINES = 3
 
-# Colors
-BACKGROUND_COLOR = QColor(28, 28, 30, 240)
-ACCENT_COLOR = QColor(0, 122, 255)
-ACCENT_GRADIENT_START = QColor(0, 122, 255)
-ACCENT_GRADIENT_END = QColor(88, 86, 214)
+# Colors - Modern dark theme with glassmorphism aesthetic
+BACKGROUND_COLOR = QColor(18, 18, 20, 248)  # Near black, very opaque
+BORDER_COLOR = QColor(255, 255, 255, 25)
+ACCENT_COLOR = QColor(99, 102, 241)  # Indigo
+ACCENT_GRADIENT_START = QColor(99, 102, 241)  # Indigo
+ACCENT_GRADIENT_END = QColor(168, 85, 247)  # Purple
 TEXT_COLOR = QColor(255, 255, 255)
-TEXT_SECONDARY = QColor(142, 142, 147)
-BUTTON_BG = QColor(58, 58, 60)
-BUTTON_HOVER = QColor(72, 72, 74)
-SUCCESS_COLOR = QColor(52, 199, 89)
-DANGER_COLOR = QColor(255, 69, 58)
+TEXT_SECONDARY = QColor(156, 163, 175)  # Gray-400
+BUTTON_BG = QColor(39, 39, 42)  # Zinc-800
+BUTTON_HOVER = QColor(63, 63, 70)  # Zinc-700
+SUCCESS_COLOR = QColor(34, 197, 94)  # Green-500
+DANGER_COLOR = QColor(239, 68, 68)  # Red-500
 
 
 class FlagButton(QPushButton):
@@ -86,7 +87,7 @@ class FlagButton(QPushButton):
         
         self.setText(flag)
         self.setToolTip(language)
-        self.setFixedSize(36, 28)
+        self.setFixedSize(38, 30)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._update_style()
     
@@ -103,9 +104,10 @@ class FlagButton(QPushButton):
         if self._is_selected:
             self.setStyleSheet("""
                 QPushButton {
-                    background-color: rgba(0, 122, 255, 200);
-                    border: 2px solid rgb(0, 122, 255);
-                    border-radius: 6px;
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 rgba(99, 102, 241, 200), stop:1 rgba(168, 85, 247, 200));
+                    border: 2px solid rgba(168, 85, 247, 180);
+                    border-radius: 8px;
                     font-size: 16px;
                     padding: 2px;
                 }
@@ -113,15 +115,15 @@ class FlagButton(QPushButton):
         else:
             self.setStyleSheet("""
                 QPushButton {
-                    background-color: rgba(58, 58, 60, 150);
-                    border: 1px solid rgba(255, 255, 255, 30);
-                    border-radius: 6px;
+                    background-color: rgba(39, 39, 42, 180);
+                    border: 1px solid rgba(255, 255, 255, 10);
+                    border-radius: 8px;
                     font-size: 16px;
                     padding: 2px;
                 }
                 QPushButton:hover {
-                    background-color: rgba(72, 72, 74, 200);
-                    border: 1px solid rgba(255, 255, 255, 50);
+                    background-color: rgba(63, 63, 70, 220);
+                    border: 1px solid rgba(255, 255, 255, 20);
                 }
             """)
 
@@ -199,8 +201,8 @@ class ModeButton(QPushButton):
         
         self.setText(get_mode_display_name(mode))
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedHeight(32)
-        self.setMinimumWidth(70)
+        self.setFixedHeight(30)
+        self.setMinimumWidth(65)
         self._update_style()
     
     @property
@@ -217,29 +219,32 @@ class ModeButton(QPushButton):
             self.setStyleSheet("""
                 QPushButton {
                     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 rgb(0, 122, 255), stop:1 rgb(88, 86, 214));
+                        stop:0 rgb(99, 102, 241), stop:1 rgb(168, 85, 247));
                     color: white;
                     border: none;
-                    border-radius: 8px;
-                    font-size: 12px;
+                    border-radius: 15px;
+                    font-size: 11px;
                     font-weight: 600;
-                    padding: 6px 12px;
+                    padding: 5px 14px;
+                    font-family: 'Segoe UI', system-ui, sans-serif;
                 }
             """)
         else:
             self.setStyleSheet("""
                 QPushButton {
-                    background-color: rgba(58, 58, 60, 180);
-                    color: rgba(255, 255, 255, 180);
-                    border: none;
-                    border-radius: 8px;
-                    font-size: 12px;
+                    background-color: rgba(39, 39, 42, 200);
+                    color: rgba(212, 212, 216, 200);
+                    border: 1px solid rgba(255, 255, 255, 8);
+                    border-radius: 15px;
+                    font-size: 11px;
                     font-weight: 500;
-                    padding: 6px 12px;
+                    padding: 5px 14px;
+                    font-family: 'Segoe UI', system-ui, sans-serif;
                 }
                 QPushButton:hover {
-                    background-color: rgba(72, 72, 74, 200);
+                    background-color: rgba(63, 63, 70, 220);
                     color: white;
+                    border: 1px solid rgba(255, 255, 255, 15);
                 }
             """)
 
@@ -312,17 +317,35 @@ class PreviewCard(QWidget):
         self._text_edit.setPlaceholderText("Transcribing...")
         self._text_edit.setStyleSheet("""
             QTextEdit {
-                background-color: rgba(44, 44, 46, 200);
-                color: white;
-                border: 1px solid rgba(255, 255, 255, 20);
-                border-radius: 10px;
-                padding: 10px;
+                background-color: rgba(39, 39, 42, 180);
+                color: #f4f4f5;
+                border: 1px solid rgba(255, 255, 255, 8);
+                border-radius: 12px;
+                padding: 12px;
                 font-size: 14px;
-                selection-background-color: rgba(0, 122, 255, 150);
+                font-family: 'Segoe UI', system-ui, sans-serif;
+                line-height: 1.5;
+                selection-background-color: rgba(99, 102, 241, 150);
+            }
+            QScrollBar:vertical {
+                background: transparent;
+                width: 8px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(255, 255, 255, 30);
+                border-radius: 4px;
+                min-height: 30px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: rgba(255, 255, 255, 50);
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0;
             }
         """)
-        self._text_edit.setMinimumHeight(60)
-        self._text_edit.setMaximumHeight(200)
+        self._text_edit.setMinimumHeight(50)
+        self._text_edit.setMaximumHeight(180)
         layout.addWidget(self._text_edit)
         
         # Mode buttons row
@@ -343,20 +366,25 @@ class PreviewCard(QWidget):
         # Cancel button (X)
         self._cancel_btn = QPushButton("✕")
         self._cancel_btn.setToolTip("Cancel (discard text)")
-        self._cancel_btn.setFixedSize(44, 36)
+        self._cancel_btn.setFixedSize(40, 40)
         self._cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._cancel_btn.clicked.connect(self._on_cancel)
         self._cancel_btn.setStyleSheet("""
             QPushButton {
-                background-color: rgba(255, 69, 58, 180);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(239, 68, 68, 200), stop:1 rgba(185, 28, 28, 200));
                 color: white;
                 border: none;
-                border-radius: 8px;
-                font-size: 16px;
-                font-weight: bold;
+                border-radius: 20px;
+                font-size: 14px;
+                font-weight: 600;
             }
             QPushButton:hover {
-                background-color: rgba(255, 69, 58, 255);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(248, 113, 113, 255), stop:1 rgba(239, 68, 68, 255));
+            }
+            QPushButton:pressed {
+                background: rgba(185, 28, 28, 255);
             }
         """)
         button_row.addWidget(self._cancel_btn)
@@ -374,20 +402,29 @@ class PreviewCard(QWidget):
         # Insert button (checkmark)
         self._insert_btn = QPushButton("✓")
         self._insert_btn.setToolTip("Insert text (or press trigger key)")
-        self._insert_btn.setFixedSize(44, 36)
+        self._insert_btn.setFixedSize(40, 40)
         self._insert_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._insert_btn.clicked.connect(self._on_insert)
         self._insert_btn.setStyleSheet("""
             QPushButton {
-                background-color: rgba(52, 199, 89, 180);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(34, 197, 94, 200), stop:1 rgba(22, 163, 74, 200));
                 color: white;
                 border: none;
-                border-radius: 8px;
-                font-size: 18px;
-                font-weight: bold;
+                border-radius: 20px;
+                font-size: 16px;
+                font-weight: 600;
             }
             QPushButton:hover {
-                background-color: rgba(52, 199, 89, 255);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba(74, 222, 128, 255), stop:1 rgba(34, 197, 94, 255));
+            }
+            QPushButton:pressed {
+                background: rgba(22, 163, 74, 255);
+            }
+            QPushButton:disabled {
+                background: rgba(63, 63, 70, 200);
+                color: rgba(255, 255, 255, 100);
             }
         """)
         button_row.addWidget(self._insert_btn)
@@ -395,25 +432,58 @@ class PreviewCard(QWidget):
         layout.addLayout(button_row)
     
     def paintEvent(self, event) -> None:
-        """Draw translucent rounded background."""
+        """Draw modern translucent rounded background with subtle glow."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        # Background with rounded corners
+        # Outer glow/shadow effect (multiple layers for smoothness)
+        for i in range(4):
+            glow_path = QPainterPath()
+            offset = (4 - i) * 2
+            glow_path.addRoundedRect(
+                QRectF(offset, offset, self.width() - offset * 2, self.height() - offset * 2),
+                CORNER_RADIUS - offset // 2, CORNER_RADIUS - offset // 2
+            )
+            glow_color = QColor(0, 0, 0, 15 + i * 8)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(glow_color)
+            painter.drawPath(glow_path)
+        
+        # Main background with rounded corners
         path = QPainterPath()
         path.addRoundedRect(
-            QRectF(0, 0, self.width(), self.height()),
+            QRectF(4, 4, self.width() - 8, self.height() - 8),
             CORNER_RADIUS, CORNER_RADIUS
         )
         
+        # Gradient background for depth
+        gradient = QLinearGradient(0, 0, 0, self.height())
+        gradient.setColorAt(0, QColor(24, 24, 27, 252))
+        gradient.setColorAt(1, QColor(18, 18, 20, 252))
+        
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(BACKGROUND_COLOR)
+        painter.setBrush(gradient)
         painter.drawPath(path)
         
+        # Top highlight line for glass effect
+        highlight_path = QPainterPath()
+        highlight_path.addRoundedRect(
+            QRectF(4, 4, self.width() - 8, 2),
+            1, 1
+        )
+        painter.setBrush(QColor(255, 255, 255, 8))
+        painter.drawPath(highlight_path)
+        
         # Subtle border
-        painter.setPen(QColor(255, 255, 255, 30))
+        from PySide6.QtGui import QPen
+        border_pen = QPen(QColor(255, 255, 255, 12))
+        border_pen.setWidth(1)
+        painter.setPen(border_pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawPath(path)
+        painter.drawRoundedRect(
+            QRectF(4.5, 4.5, self.width() - 9, self.height() - 9),
+            CORNER_RADIUS, CORNER_RADIUS
+        )
         
         painter.end()
     
