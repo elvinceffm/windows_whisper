@@ -562,7 +562,7 @@ class PreviewCard(QWidget):
     
     @Slot()
     def hide_card(self) -> None:
-        \"\"\"Hide the card immediately (no animation for faster focus return).\"\"\"
+        """Hide the card immediately (no animation for faster focus return)."""
         self._fade_animation.stop()
         self.hide()
         self._opacity_effect.setOpacity(0.0)
