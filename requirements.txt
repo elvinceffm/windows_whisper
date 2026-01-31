@@ -1,0 +1,10 @@
+# Dictate for Windows - Dependencies
+# Install with: pip install -r requirements.txt
+
+PySide6>=6.6.0
+openai>=1.0.0
+sounddevice>=0.4.6
+numpy>=1.24.0
+pynput>=1.7.6
+pyperclip>=1.8.0
+pywin32>=306
