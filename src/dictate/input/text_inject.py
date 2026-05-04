@@ -79,10 +79,11 @@ class TextInjector:
         finally:
             # Restore original clipboard after a delay
             if self._original_clipboard is not None:
+                clipboard_to_restore = self._original_clipboard
                 def restore_later():
                     time.sleep(0.8)
                     try:
-                        pyperclip.copy(self._original_clipboard)
+                        pyperclip.copy(clipboard_to_restore)
                     except Exception:
                         pass
                 threading.Thread(target=restore_later, daemon=True).start()

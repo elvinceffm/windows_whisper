@@ -248,11 +248,18 @@ def enable_autostart() -> bool:
         
         # Get the Python executable and script
         python_exe = sys.executable
-        # Use pythonw.exe for no console window
-        pythonw_exe = python_exe.replace("python.exe", "pythonw.exe")
-        if not Path(pythonw_exe).exists():
-            pythonw_exe = python_exe
-        
+
+        # Check if the pip-installed GUI executable exists
+        gui_exe = Path(python_exe).parent / "dictate-gui.exe"
+
+        if gui_exe.exists():
+            target_path = str(gui_exe)
+            arguments = ""
+        else:
+            # Fallback to pythonw.exe
+            target_path = python_exe.replace("python.exe", "pythonw.exe")
+            arguments = "-m dictate"
+
         # Create shortcut using Windows Script Host
         startup_folder = get_startup_folder()
         startup_folder.mkdir(parents=True, exist_ok=True)
@@ -265,11 +272,11 @@ def enable_autostart() -> bool:
             
             shell = win32com.client.Dispatch("WScript.Shell")
             shortcut = shell.CreateShortCut(str(shortcut_path))
-            shortcut.TargetPath = pythonw_exe
-            shortcut.Arguments = "-m dictate"
+            shortcut.TargetPath = target_path
+            shortcut.Arguments = arguments
             shortcut.WorkingDirectory = str(Path.cwd())
             shortcut.Description = "Dictate for Windows - AI-powered dictation"
-            shortcut.IconLocation = pythonw_exe
+            shortcut.IconLocation = target_path
             shortcut.save()
             
             return True
@@ -281,8 +288,8 @@ def enable_autostart() -> bool:
             ps_script = f'''
 $WshShell = New-Object -ComObject WScript.Shell
 $Shortcut = $WshShell.CreateShortcut("{shortcut_path}")
-$Shortcut.TargetPath = "{pythonw_exe}"
-$Shortcut.Arguments = "-m dictate"
+$Shortcut.TargetPath = "{target_path}"
+$Shortcut.Arguments = "{arguments}"
 $Shortcut.WorkingDirectory = "{Path.cwd()}"
 $Shortcut.Description = "Dictate for Windows - AI-powered dictation"
 $Shortcut.Save()
