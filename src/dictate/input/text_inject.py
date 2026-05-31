@@ -23,7 +23,6 @@ class TextInjector:
     
     def __init__(self):
         self._keyboard = KeyboardController()
-        self._original_clipboard: Optional[str] = None
     
     def inject(self, text: str) -> bool:
         """
@@ -44,12 +43,6 @@ class TextInjector:
         print(f"[TextInjector] Injecting text: {text[:50]}...")
         
         try:
-            # Save original clipboard
-            try:
-                self._original_clipboard = pyperclip.paste()
-            except Exception:
-                self._original_clipboard = None
-            
             # Copy text to clipboard
             pyperclip.copy(text)
             print(f"[TextInjector] Copied to clipboard, waiting...")
@@ -75,19 +68,6 @@ class TextInjector:
         except Exception as e:
             print(f"[TextInjector] Failed: {e}")
             return False
-        
-        finally:
-            # Restore original clipboard after a delay
-            if self._original_clipboard is not None:
-                clipboard_to_restore = self._original_clipboard
-                def restore_later():
-                    time.sleep(0.8)
-                    try:
-                        pyperclip.copy(clipboard_to_restore)
-                    except Exception:
-                        pass
-                threading.Thread(target=restore_later, daemon=True).start()
-                self._original_clipboard = None
 
 
 def inject_text(text: str) -> bool:
