@@ -258,14 +258,17 @@ class RecordingPill(QWidget):
         text_color = TEXT_COLOR if self._dark_mode else TEXT_COLOR_LIGHT
         
         # Outer glow/shadow effect for depth
+        # We start the pill rectangle with an inset so the glow can expand naturally
+        pill_rect = QRectF(6, 6, self.width() - 12, self.height() - 12)
+        
         for i in range(3):
             glow_path = QPainterPath()
             offset = (3 - i) * 2
             glow_path.addRoundedRect(
-                QRectF(offset, offset, self.width() - offset * 2, self.height() - offset * 2),
-                CORNER_RADIUS - offset // 2, CORNER_RADIUS - offset // 2
+                pill_rect.adjusted(-offset, -offset, offset, offset),
+                CORNER_RADIUS + offset // 2, CORNER_RADIUS + offset // 2
             )
-            glow_color = QColor(0, 0, 0, 20 + i * 10)
+            glow_color = QColor(0, 0, 0, 15 + i * 5)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(glow_color)
             painter.drawPath(glow_path)
@@ -273,7 +276,7 @@ class RecordingPill(QWidget):
         # Main background with translucent gradient
         path = QPainterPath()
         path.addRoundedRect(
-            QRectF(3, 3, self.width() - 6, self.height() - 6),
+            pill_rect,
             CORNER_RADIUS, CORNER_RADIUS
         )
         
@@ -288,7 +291,7 @@ class RecordingPill(QWidget):
         # Subtle top highlight
         highlight_path = QPainterPath()
         highlight_path.addRoundedRect(
-            QRectF(3, 3, self.width() - 6, 2),
+            pill_rect.adjusted(0, 0, 0, -pill_rect.height() + 2),
             1, 1
         )
         painter.setBrush(QColor(255, 255, 255, 8))
@@ -300,7 +303,7 @@ class RecordingPill(QWidget):
         painter.setPen(border_pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRoundedRect(
-            QRectF(3.5, 3.5, self.width() - 7, self.height() - 7),
+            pill_rect.adjusted(0.5, 0.5, -0.5, -0.5),
             CORNER_RADIUS, CORNER_RADIUS
         )
         
